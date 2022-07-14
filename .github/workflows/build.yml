@@ -1,0 +1,26 @@
+name: .NET build
+
+on: [release]
+
+jobs:
+  build-x64:
+    strategy:
+      matrix:
+        rid: [linux-x64, osx-x64, win-x64]
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v2
+      with:
+        dotnet-version: 6.0.x
+    - name: Build
+      run: dotnet publish -c Release -r ${{ matrix.rid }} --self-contained false
+    - name: Upload build artifacts in the release
+      uses: actions/upload-artifact@v3
+      with:
+        name: dotnet-build-${{ matrix.rid }}
+        path: bin/Release/net6.0/${{matrix.rid}}/publish/*
+      # Use always() to always run this step to publish test results when there are test failures
+      if: ${{ always() }}
+    
