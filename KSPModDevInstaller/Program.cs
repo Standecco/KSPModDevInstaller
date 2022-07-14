@@ -1,5 +1,4 @@
-﻿using System;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -17,27 +16,33 @@ namespace KSPModDevInstaller
 
         public static string? KSPPath;
         public static string? RepoPath;
-        public static string[] ModIds;
-            
+
         private static void Main(string[] args)
         {
+            Console.WriteLine();
+            
             // get KSP path from env vars or by asking
             KSPPath = GetKSPPath();
             Console.WriteLine($"KSP dev install selected: {KSPPath}");
+            KSPPath = KSPPath.TrimEnd(DirSeparator);
+            
+            Console.WriteLine();
             
             // get the repo path or clone it
             if (AskYesOrNo("Have you already cloned the repo?"))
             {
-                AskRepoPath();
+                RepoPath = AskRepoPath();
             }
             else
             {
-                if (!AskRepoURLAndContinue(out string repoURL))
+                if (!AskRepoURLAndContinue(out string repoURL, out RepoPath))
                     return;
                 Process gitProc = Process.Start(GitBin, $"clone {repoURL} \"{RepoPath}\"");
                 gitProc.WaitForExit();
                 gitProc.Dispose();
             }
+            
+            Console.WriteLine();
 
             // find the netkan and optionally install the mod through CKAN
             string[] modNetkans = Directory.GetFiles(RepoPath, "*.netkan", SearchOption.AllDirectories);
@@ -50,8 +55,10 @@ namespace KSPModDevInstaller
             if (modNetkans.Length == 0)
             {
                 Console.WriteLine("No .netkan files found in the repo.");
-                // TODO: ask the user for the mod name and install it regardless
+                FallbackCKANInstall("Do you wish to install a mod through CKAN anyway?");
             }
+            
+            Console.WriteLine();
 
             // find the gamedata in the repo and optionally symlink its contents
             string[] repoGamedatas = Directory.GetDirectories(RepoPath, "GameData", SearchOption.AllDirectories);
@@ -60,6 +67,8 @@ namespace KSPModDevInstaller
                 string[] repoModDirs = Directory.GetDirectories(repoGamedatas[0]);
                 GameDataSymlink(repoModDirs); //realistically, there's only 1 gamedata
             }
+            
+            Console.WriteLine();
 
             // look for .csproj files and create .csproj.users with the dependencies
             string[] csprojs = Directory.GetFiles(RepoPath, "*.csproj", SearchOption.AllDirectories);
@@ -134,7 +143,7 @@ namespace KSPModDevInstaller
             return Path.GetFullPath(kspPath);
         }
         
-        private static void AskRepoPath()
+        private static string AskRepoPath()
         {
             Console.Write("Enter git repository path: ");
             string? ans = Console.ReadLine();
@@ -146,10 +155,10 @@ namespace KSPModDevInstaller
                 ans = Console.ReadLine();
             }
 
-            RepoPath = Path.GetFullPath(ans);
+            return Path.GetFullPath(ans!);
         }
         
-        private static bool AskRepoURLAndContinue(out string repoURL)
+        private static bool AskRepoURLAndContinue(out string repoURL, out string repoPath)
         {
             var reg = new Regex(@"((git|ssh|https?)|(git@[\w\.]+)):(//)?([\w\.@/~:-]+)/([\w\.@~:-]+)(\.git)?\/?");
             
@@ -169,9 +178,9 @@ namespace KSPModDevInstaller
             
             // make git clone the repo next to the running program
             string? pwd = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-            RepoPath = $"{pwd}{DirSeparator}{repoName}";
+            repoPath = $"{pwd}{DirSeparator}{repoName}";
             
-            return AskYesOrNo($"Repo {repoName} found. It will be cloned at {RepoPath}. Continue? ");
+            return AskYesOrNo($"Repo {repoName} found. It will be cloned at {repoPath}. Continue? ");
         }
 
         private static void ParseNetkanAndInstallMod(string netkan)
@@ -193,7 +202,8 @@ namespace KSPModDevInstaller
             }
             else
             {
-                Console.WriteLine($"No identifier found in {netkan}");
+                Console.WriteLine($"No identifier found in {netkan}.");
+                FallbackCKANInstall("Do you wish to install a mod through CKAN anyway?");
             }
         }
 
@@ -220,7 +230,6 @@ namespace KSPModDevInstaller
                 return;
             }
             
-            Console.WriteLine();
             Console.WriteLine($"GameData found in the repo: found folder(s):");
             foreach (string modDir in repoModDirs)
                 Console.WriteLine(modDir);
@@ -247,6 +256,12 @@ namespace KSPModDevInstaller
                         // we wait until we know it doesn't exist anymore to continue
                         while (Directory.Exists(kspModDir)) Thread.Sleep(1);
                     }
+                    // also check for file because a symlink is a file, at least on linux
+                    if (File.Exists(kspModDir))
+                    {
+                        File.Delete(kspModDir);
+                        while (File.Exists(kspModDir)) Thread.Sleep(1);
+                    }
                     // creates a symlink at `path`, pointing to `pathToTarget`
                     Directory.CreateSymbolicLink(kspModDir, repoModDir);
                     
@@ -264,7 +279,7 @@ namespace KSPModDevInstaller
             var dllReferences = GetCsprojReferences(csprojFile);
             
             string gamedataPath = $"{KSPPath}{DirSeparator}GameData";
-            var dllPathDict = new Dictionary<string, string?>();
+            var dllPathDict = new Dictionary<string, string?>(); // dict ensures that all paths are unique (as long as the dlls are)
 
             foreach (string dll in dllReferences)
             {
@@ -322,7 +337,7 @@ namespace KSPModDevInstaller
 
             // <PropertyGroup>
             XmlElement propGrpElem = csprojUserXml.CreateElement("", "PropertyGroup", null);
-            csprojUserXml.AppendChild(propGrpElem);
+            projElem.AppendChild(propGrpElem);
             
             // ReferencePath element with KSP_Data/Managed in it
             XmlElement refPathDataManagedElem = csprojUserXml.CreateElement("", "ReferencePath", null);
@@ -338,17 +353,33 @@ namespace KSPModDevInstaller
                     csprojUserXml.CreateTextNode($"{KSPPath}{DirSeparator}KSP_Data{DirSeparator}Managed");
                 refPathDataManagedElem.AppendChild(nodeText);
             }
+            propGrpElem.AppendChild(refPathDataManagedElem);
             
             foreach (string? path in refPaths)
             {
                 // ReferencePath element with the paths extracted from GameData
                 XmlElement refPathElem = csprojUserXml.CreateElement("", "ReferencePath", null);
                 refPathElem.AppendChild(csprojUserXml.CreateTextNode(path));
-                csprojUserXml.AppendChild(refPathElem);
+                propGrpElem.AppendChild(refPathElem);
             }
 
             csprojUserXml.Save(csprojUserFile);
         }
-        
+
+        private static void FallbackCKANInstall(string RequestMessage)
+        {
+            if (!AskYesOrNo(RequestMessage)) return;
+            
+            Console.WriteLine("Input the identifier of the mod(s): ");
+            string? ans = Console.ReadLine();
+
+            while (string.IsNullOrEmpty(ans))
+            {
+                Console.WriteLine("Invalid answer. Input the identifier of the mod(s): ");
+                ans = Console.ReadLine();
+            }
+                
+            InstallModWithCKAN(ans);
+        }
     }
 }
