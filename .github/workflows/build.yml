@@ -23,13 +23,19 @@ jobs:
         dotnet-version: 6.0.x
         
     - name: Build
-      run: dotnet publish -c Release -r ${{ matrix.rid }} --self-contained false
+      run: |
+        RELEASE_DIR="$RUNNER_TEMP/release"
+        echo "Release dir: $RELEASE_DIR"
+        mkdir -v "$RELEASE_DIR"
+        echo "::set-output name=release-dir::$RELEASE_DIR"
+        cd "$GITHUB_WORKSPACE/KSPModDevInstaller"
+        dotnet publish -c Release -r ${{ matrix.rid }} --self-contained false
+        cp -v -R "$GITHUB_WORKSPACE/KSPModDevInstaller/bin/Release/net6.0/." "$RELEASE_DIR"
+        cd "$RELEASE_DIR"
+        zip -r "KSPDevModInstaller-${{ matrix.rid }}.zip" "$RELEASE_DIR/${{ matrix.rid }}/publish/"
       
-    - name: Upload build artifacts in the release
-      uses: actions/upload-artifact@v3.1.0
+    - name: Release
+      uses: softprops/action-gh-release@v1
       with:
-        name: build-${{ matrix.rid }}
-        path: bin/Release/net6.0/${{matrix.rid}}/publish/*
-      # Use always() to always run this step to publish test results when there are test failures
-      if: ${{ always() }}
-    
+        files: $RELEASE_DIR/KSPDevModInstaller-${{ matrix.rid }}.zip
+
