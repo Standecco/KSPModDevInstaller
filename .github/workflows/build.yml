@@ -1,6 +1,9 @@
 name: .NET build
 
-on: [release]
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
 
 jobs:
   build-x64:
@@ -9,17 +12,23 @@ jobs:
         rid: [linux-x64, osx-x64, win-x64]
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    
+    - name: Checkout
+      uses: actions/checkout@v3
+      # GITHUB_WORKSPACE : the default location of your repository when using the checkout action.
+      
     - name: Setup .NET
-      uses: actions/setup-dotnet@v2
+      uses: actions/setup-dotnet@v2.1.0
       with:
         dotnet-version: 6.0.x
+        
     - name: Build
       run: dotnet publish -c Release -r ${{ matrix.rid }} --self-contained false
+      
     - name: Upload build artifacts in the release
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v3.1.0
       with:
-        name: dotnet-build-${{ matrix.rid }}
+        name: build-${{ matrix.rid }}
         path: bin/Release/net6.0/${{matrix.rid}}/publish/*
       # Use always() to always run this step to publish test results when there are test failures
       if: ${{ always() }}
