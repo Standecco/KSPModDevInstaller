@@ -339,29 +339,24 @@ namespace KSPModDevInstaller
             XmlElement propGrpElem = csprojUserXml.CreateElement("", "PropertyGroup", null);
             projElem.AppendChild(propGrpElem);
             
-            // ReferencePath element with KSP_Data/Managed in it
-            XmlElement refPathDataManagedElem = csprojUserXml.CreateElement("", "ReferencePath", null);
+            // add KSP_Data/Managed to ReferencePath
+            XmlElement refPathElem = csprojUserXml.CreateElement("", "ReferencePath", null);
+            string nodeText;
             if (Directory.Exists($"{KSPPath}{DirSeparator}KSP_x64_Data"))
             {
-                XmlText nodeText =
-                    csprojUserXml.CreateTextNode($"{KSPPath}{DirSeparator}KSP_x64_Data{DirSeparator}Managed");
-                refPathDataManagedElem.AppendChild(nodeText);
+                nodeText = $"{KSPPath}{DirSeparator}KSP_x64_Data{DirSeparator}Managed";
             }
             else //Linux has no KSP_x64_Data directory
             {
-                XmlText nodeText =
-                    csprojUserXml.CreateTextNode($"{KSPPath}{DirSeparator}KSP_Data{DirSeparator}Managed");
-                refPathDataManagedElem.AppendChild(nodeText);
+                nodeText = $"{KSPPath}{DirSeparator}KSP_Data{DirSeparator}Managed";
             }
-            propGrpElem.AppendChild(refPathDataManagedElem);
             
-            foreach (string? path in refPaths)
-            {
-                // ReferencePath element with the paths extracted from GameData
-                XmlElement refPathElem = csprojUserXml.CreateElement("", "ReferencePath", null);
-                refPathElem.AppendChild(csprojUserXml.CreateTextNode(path));
-                propGrpElem.AppendChild(refPathElem);
-            }
+            // add paths extracted from GameData to ReferencePath
+            if (refPaths.Count > 0)
+                nodeText += ";" + string.Join(';', refPaths);
+            
+            refPathElem.AppendChild(csprojUserXml.CreateTextNode(nodeText));
+            propGrpElem.AppendChild(refPathElem);
 
             csprojUserXml.Save(csprojUserFile);
         }
