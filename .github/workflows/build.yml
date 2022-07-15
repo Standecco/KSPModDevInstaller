@@ -33,7 +33,7 @@ jobs:
         dotnet publish -c Release -r ${{ matrix.rid }} --self-contained false
         cp -v -R "${GITHUB_WORKSPACE}/KSPModDevInstaller/bin/Release/net6.0/." "${RELEASE_DIR}"
         cd "${RELEASE_DIR}"
-        zip -r -j "KSPDevModInstaller-${{ matrix.rid }}.zip" "${{ matrix.rid }}/publish/*"
+        zip -r -j "KSPDevModInstaller-${{ matrix.rid }}.zip" "${{ matrix.rid }}/publish/"
       
     - name: Upload artifacts to release
       uses: softprops/action-gh-release@v1
