@@ -23,19 +23,20 @@ jobs:
         dotnet-version: 6.0.x
         
     - name: Build
+      id: build
       run: |
-        RELEASE_DIR="$RUNNER_TEMP/release"
-        echo "Release dir: $RELEASE_DIR"
-        mkdir -v "$RELEASE_DIR"
-        echo "::set-output name=release-dir::$RELEASE_DIR"
-        cd "$GITHUB_WORKSPACE/KSPModDevInstaller"
+        RELEASE_DIR="${RUNNER_TEMP}/release"
+        echo "Release dir: ${RELEASE_DIR}"
+        mkdir -v "${RELEASE_DIR}"
+        echo "::set-output name=release-dir::${RELEASE_DIR}"
+        cd "${GITHUB_WORKSPACE}/KSPModDevInstaller"
         dotnet publish -c Release -r ${{ matrix.rid }} --self-contained false
-        cp -v -R "$GITHUB_WORKSPACE/KSPModDevInstaller/bin/Release/net6.0/." "$RELEASE_DIR"
-        cd "$RELEASE_DIR"
-        zip -r "KSPDevModInstaller-${{ matrix.rid }}.zip" "$RELEASE_DIR/${{ matrix.rid }}/publish/"
+        cp -v -R "${GITHUB_WORKSPACE}/KSPModDevInstaller/bin/Release/net6.0/." "${RELEASE_DIR}"
+        cd "${RELEASE_DIR}"
+        zip -r "KSPDevModInstaller-${{ matrix.rid }}.zip" "${RELEASE_DIR}/${{ matrix.rid }}/publish/"
       
-    - name: Release
+    - name: Upload artifacts to release
       uses: softprops/action-gh-release@v1
       with:
-        files: $RELEASE_DIR/KSPDevModInstaller-${{ matrix.rid }}.zip
+        files: ${{ steps.build.outputs.release-dir }}/KSPDevModInstaller-${{ matrix.rid }}.zip
 
