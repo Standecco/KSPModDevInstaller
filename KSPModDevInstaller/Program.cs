@@ -177,9 +177,9 @@ namespace KSPModDevInstaller
             repoURL = reg.Match(answer).Groups[0].ToString();
             
             // make git clone the repo next to the running program
-            string? pwd = Path.GetDirectoryName(Directory.GetCurrentDirectory());
+            string? pwd = Directory.GetCurrentDirectory();
             repoPath = $"{pwd}{DirSeparator}{repoName}";
-            
+
             return AskYesOrNo($"Repo {repoName} found. It will be cloned at {repoPath}. Continue? ");
         }
 
